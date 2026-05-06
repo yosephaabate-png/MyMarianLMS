@@ -7,26 +7,6 @@ BG_MAIN = "#FFFFFF"
 BG_SOFT = "#F8F9FB"
 TEXT_DARK = "#1F2937"
 
-INDIGO_EXTRA_SCSS = f"""
-$primary: {PRIMARY};
-$secondary: {SECONDARY};
-$brand-accent: {ACCENT};
-$brand-primary: {PRIMARY};
-$brand-secondary: {SECONDARY};
-$body-bg: {BG_MAIN};
-$footer-bg: {BG_SOFT};
-$footer-color: {TEXT_DARK};
-$gray-base: {TEXT_DARK};
-$text-color: {TEXT_DARK};
-$link-color: {PRIMARY};
-$link-hover-color: {SECONDARY};
-$btn-primary-bg: {PRIMARY};
-$btn-primary-border: {PRIMARY};
-$btn-primary-hover-bg: {SECONDARY};
-$action-primary-bg: {PRIMARY};
-$action-primary-hover-bg: {SECONDARY};
-"""
-
 MFE_BRAND_CSS = f""":root {{
   --pgn-color-primary: {PRIMARY};
   --pgn-color-primary-base: {PRIMARY};
@@ -43,44 +23,43 @@ MFE_BRAND_CSS = f""":root {{
   --pgn-color-text-default: {TEXT_DARK};
   --pgn-color-background-base: {BG_MAIN};
   --pgn-color-background-soft: {BG_SOFT};
-  --pgn-color-footer-background: {BG_SOFT};
   --pgn-color-link-base: {PRIMARY};
   --pgn-color-link-hover: {SECONDARY};
 }}
-
-body, .footer, footer {{
-  color: {TEXT_DARK};
-}}
-
-.footer, footer {{
-  background-color: {BG_SOFT} !important;
-}}
-
+body {{ color: {TEXT_DARK}; background-color: {BG_MAIN}; }}
+.footer, footer {{ background-color: {BG_SOFT} !important; color: {TEXT_DARK}; }}
 a {{ color: {PRIMARY}; }}
 a:hover {{ color: {SECONDARY}; }}
+.btn-primary {{ background-color: {PRIMARY}; border-color: {PRIMARY}; }}
+.btn-primary:hover, .btn-primary:focus {{ background-color: {SECONDARY}; border-color: {SECONDARY}; }}
 """
 
-hooks.Filters.ENV_PATCHES.add_items([
-    ("indigo-extra-scss", INDIGO_EXTRA_SCSS),
-    ("indigo-extra-sass", INDIGO_EXTRA_SCSS),
-    (
-        "mfe-dockerfile-post-npm-install",
-        (
-            "RUN mkdir -p /openedx/brand-overrides && "
-            f"printf '%s' {MFE_BRAND_CSS!r} "
-            "> /openedx/brand-overrides/mymarian.css && "
-            "echo \"@import '/openedx/brand-overrides/mymarian.css';\" "
-            ">> src/index.scss || true"
-        ),
-    ),
-    (
-        "openedx-lms-common-settings",
-        f"""
-MYMARIAN_BRAND_CSS = '''
-<style>
+# Escape for safe single-quoted heredoc inside a Dockerfile RUN.
+MFE_BRAND_CSS_ESCAPED = MFE_BRAND_CSS.replace("'", "'\\''")
+
+MFE_DOCKERFILE_PATCH = f"""RUN printf '%s' '{MFE_BRAND_CSS_ESCAPED}' > public/mymarian-brand.css \\
+ && sed -i 's#</head>#<link rel="stylesheet" href="/mymarian-brand.css"></head>#' public/index.html
+"""
+
+MFE_NAMES = [
+    "learning",
+    "learner-dashboard",
+    "profile",
+    "account",
+    "discussions",
+    "authn",
+]
+
+LMS_INLINE_CSS = f"""
+MYMARIAN_BRAND_CSS = '''<style>
 {MFE_BRAND_CSS}
-</style>
-'''
-""",
-    ),
-])
+</style>'''
+"""
+
+hooks.Filters.ENV_PATCHES.add_items(
+    [(f"mfe-dockerfile-post-npm-install-{name}", MFE_DOCKERFILE_PATCH) for name in MFE_NAMES]
+    + [
+        ("openedx-lms-common-settings", LMS_INLINE_CSS),
+        ("openedx-cms-common-settings", LMS_INLINE_CSS),
+    ]
+)
