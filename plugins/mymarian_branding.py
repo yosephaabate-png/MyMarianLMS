@@ -56,10 +56,48 @@ MYMARIAN_BRAND_CSS = '''<style>
 </style>'''
 """
 
+# Append our SCSS variable overrides directly onto the indigo theme
+# inside the openedx image at build time. This recolors footer bg, body
+# text, links, and buttons in the legacy LMS / Studio templates (which
+# tutor-indigo's INDIGO_PRIMARY_COLOR / INDIGO_ACCENT_COLOR alone do not
+# cover). The "|| true" guards against the file path moving in a future
+# indigo release so that the openedx image still builds.
+INDIGO_OVERRIDE_SCSS = f"""
+// MyMarian brand overrides
+$primary: {PRIMARY};
+$secondary: {SECONDARY};
+$brand-primary: {PRIMARY};
+$brand-secondary: {SECONDARY};
+$brand-accent: {ACCENT};
+$body-bg: {BG_MAIN};
+$footer-bg: {BG_SOFT};
+$footer-color: {TEXT_DARK};
+$text-color: {TEXT_DARK};
+$gray-base: {TEXT_DARK};
+$link-color: {PRIMARY};
+$link-hover-color: {SECONDARY};
+$btn-primary-bg: {PRIMARY};
+$btn-primary-border: {PRIMARY};
+$btn-primary-hover-bg: {SECONDARY};
+$action-primary-bg: {PRIMARY};
+$action-primary-hover-bg: {SECONDARY};
+"""
+
+INDIGO_OVERRIDE_SCSS_ESCAPED = INDIGO_OVERRIDE_SCSS.replace("'", "'\\''")
+
+OPENEDX_DOCKERFILE_PATCH = f"""
+RUN for f in \\
+      /openedx/themes/indigo/lms/static/sass/partials/lms/theme/_variables.scss \\
+      /openedx/themes/indigo/cms/static/sass/partials/cms/theme/_variables.scss; do \\
+      [ -f "$f" ] && printf '%s' '{INDIGO_OVERRIDE_SCSS_ESCAPED}' >> "$f" || true; \\
+    done
+"""
+
 hooks.Filters.ENV_PATCHES.add_items(
     [(f"mfe-dockerfile-post-npm-install-{name}", MFE_DOCKERFILE_PATCH) for name in MFE_NAMES]
     + [
         ("openedx-lms-common-settings", LMS_INLINE_CSS),
         ("openedx-cms-common-settings", LMS_INLINE_CSS),
+        ("openedx-dockerfile-post-python-install", OPENEDX_DOCKERFILE_PATCH),
     ]
 )
